@@ -73,8 +73,11 @@ func main() {
 
 		productCollector.OnHTML("span.a-size-base.a-color-base", func(e *colly.HTMLElement) {
 			rating := controller.GetRating(e)
-			fmt.Println("Rating:", rating)
+			if rating != 0 {
+				fmt.Println("Rating:", rating)
+			}
 		})
+		
 
 		productCollector.OnHTML("span#acrCustomerReviewText", func(e *colly.HTMLElement) {
 			reviewCount := controller.GetReviewCount(e)
