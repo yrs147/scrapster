@@ -49,3 +49,7 @@ func GetAvailability(e *colly.HTMLElement) string {
 
 	return availability
 }
+
+// func Createlink(url string) string{
+// 	baselink := "https://www.amazon.in/"
+// }
