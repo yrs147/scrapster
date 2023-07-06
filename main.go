@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
+	controller "github.com/yrs147/scrapster/controllers"
 
 	"github.com/gocolly/colly"
-	controller "github.com/yrs147/scrapster/controllers"
 )
 
 var userAgents = []string{
@@ -17,6 +18,14 @@ var userAgents = []string{
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Safari/604.1.38",
 	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0",
 	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Safari/604.1.38",
+}
+
+type Product struct {
+	Title        string
+	Price        float64
+	Rating       float64
+	ReviewCount  int
+	Availability string
 }
 
 func randUserAgent() string {
@@ -29,6 +38,7 @@ func main() {
 	c := colly.NewCollector(colly.AllowedDomains("www.amazon.in"))
 
 	var links []string
+	var wg sync.WaitGroup
 
 	c.OnRequest(func(r *colly.Request) {
 		r.Headers.Set("User-Agent", randUserAgent())
@@ -43,12 +53,12 @@ func main() {
 		log.Println("Request URL:", r.Request.URL, "failed with response:", r, "\nError", err)
 	})
 
-	err := c.Visit("https://www.amazon.in/s?k=macbook")
+	err := c.Visit("https://www.amazon.in/s?k=iphone")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	count := 1
+	products := []Product{} // Initialize an empty slice of products
 
 	for _, link := range links {
 		a := "https://www.amazon.in" + link
@@ -60,40 +70,60 @@ func main() {
 			r.Headers.Set("User-Agent", randUserAgent())
 		})
 
-		fmt.Println("------------Printing Details of Product", count, "-----------")
+		product := Product{} // Create a new product instance
+
+		wg.Add(1)
+		go func(productCollector *colly.Collector, product *Product) {
+			defer wg.Done()
+			err := productCollector.Visit(a)
+			if err != nil {
+				log.Fatal(err)
+			}
+			products = append(products, *product) // Append the product to the products slice
+		}(productCollector, &product)
+
 		productCollector.OnHTML("span#productTitle", func(e *colly.HTMLElement) {
 			title := controller.GetTitle(e)
-			fmt.Println("Title:", title)
+			product.Title = title
 		})
 
-		productCollector.OnHTML("span.a-price.aok-align-center span.a-offscreen", func(e *colly.HTMLElement) {
+		productCollector.OnHTML("span.a-price-whole", func(e *colly.HTMLElement) {
 			price := controller.GetPrice(e)
-			fmt.Println("Price:", price)
+			product.Price = price
 		})
 
 		productCollector.OnHTML("span.a-size-base.a-color-base", func(e *colly.HTMLElement) {
 			rating := controller.GetRating(e)
 			if rating != 0 {
-				fmt.Println("Rating:", rating)
+				product.Rating = rating
 			}
 		})
-		
 
 		productCollector.OnHTML("span#acrCustomerReviewText", func(e *colly.HTMLElement) {
 			reviewCount := controller.GetReviewCount(e)
-			fmt.Println("Review Count:", reviewCount)
+			product.ReviewCount = reviewCount
 		})
 
 		productCollector.OnHTML("div#availability span", func(e *colly.HTMLElement) {
 			availability := controller.GetAvailability(e)
-			fmt.Println("Availability:", availability)
+			product.Availability = availability
 		})
 
-		err := productCollector.Visit(a)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		count++
 	}
+
+	wg.Wait() // Wait for all goroutines to finish
+
+	// Print the collected products
+	// for i, product := range products {
+	// 	fmt.Println("------------Printing Details of Product", i+1, "-----------")
+	// 	fmt.Println("Title:", product.Title)
+	// 	fmt.Println("Price:", product.Price)
+	// 	fmt.Println("Rating:", product.Rating)
+	// 	fmt.Println("Review Count:", product.ReviewCount)
+	// 	fmt.Println("Availability:", product.Availability)
+	// 	fmt.Println("----------------------------------------------")
+	// 	time.Sleep(time.Second *10)
+	// }
+
+	fmt.Println(products[0])
 }

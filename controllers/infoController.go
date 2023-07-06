@@ -7,6 +7,7 @@ import (
 	"github.com/gocolly/colly"
 )
 
+
 func GetTitle(e *colly.HTMLElement) string {
 	title := e.Text
 	title = strings.TrimSpace(title)
